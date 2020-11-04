@@ -126,7 +126,7 @@ class Helysia:
         tx_hash = HexBytes(self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)).hex()
         return tx_hash
 
-    def price(self, amount=1):
+    def tokenPrice(self, amount=1):
         # get EURO/DOLAR rate
         response = urllib.request.urlopen('https://api.exchangeratesapi.io/latest')        
         data = response.read()
@@ -163,12 +163,18 @@ class Helysia:
         n = PPM * overallBalance
         d = overallSupply * reserveRatio 
         
-        price = n / d
+        tokenPrice = n / d
 
-        # change to price
-        euros = price / eurusd
+        # change to euros
+        euros = tokenPrice / eurusd
 
-        return euros, price
+        return euros, tokenPrice
+
+    def price(self, amount=1):
+        eur, usd = self.tokenPrice(1)
+        tokens = float(amount) / eur
+        
+        return tokens
 
 
 if __name__ == '__main__':
@@ -177,9 +183,9 @@ if __name__ == '__main__':
     except NameError:
         raise
     while True:
-        action = input('What should I do? [B]Balance, [X]Transaction receipt, '
-                 'token [P]rice, send [E]ther, or send [T]okens? ').upper()
-        if action not in 'BXPET' or len(action) != 1:
+        action = input('What should I do? [B]alance, [X]Transaction receipt, '
+                       'token [P]rice, EU[R] price, send [E]ther, or send [T]okens? ').upper()
+        if action not in 'BXPRET' or len(action) != 1:
             print('I don\'t know how to do that')
             continue
         if action == 'B':            
@@ -216,7 +222,14 @@ if __name__ == '__main__':
         elif action == 'P':
             amount = input('How much Helysia (1)? ')
             if amount:
-                euros, usd = helysia.price(amount)
+                euros, usd = helysia.tokenPrice(amount)
             else:
-                euros, usd = helysia.price()
+                euros, usd = helysia.tokenPrice()
             print(euros, 'EUR', usd, 'USD')
+        elif action == 'R':
+            amount = input('How much EUR (1)? ')
+            if amount:
+                tokens = helysia.price(amount)
+            else:
+                tokens = helysia.price()
+            print(tokens)
