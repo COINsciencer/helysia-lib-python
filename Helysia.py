@@ -126,7 +126,7 @@ class Helysia:
         tx_hash = HexBytes(self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)).hex()
         return tx_hash
 
-    def price(self, amount=300):
+    def price(self, amount=1):
         # get EURO/DOLAR rate
         response = urllib.request.urlopen('https://api.exchangeratesapi.io/latest')        
         data = response.read()
@@ -214,5 +214,9 @@ if __name__ == '__main__':
                 tx_hash = helysia.sendTokens()
             print('https://{}.etherscan.io/tx/{}'.format(os.environ.get('CHAIN'), tx_hash))
         elif action == 'P':
-            euros, usd = helysia.price()
+            amount = input('How much Helysia (1)? ')
+            if amount:
+                euros, usd = helysia.price(amount)
+            else:
+                euros, usd = helysia.price()
             print(euros, 'EUR', usd, 'USD')
