@@ -1,6 +1,7 @@
 import os
 from hexbytes import HexBytes
 from web3 import Web3
+from web3.middleware import geth_poa_middleware
 import urllib
 import json
 from abis import abis
@@ -36,6 +37,9 @@ class Helysia:
         # init web3 provider (using Infura)
         self.web3 = Web3(Web3.HTTPProvider('https://{}.infura.io/v3/{}'.format(self.CHAIN, self.INFURA)))
 
+        if self.CHAIN == 'rinkeby':
+            self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
         # init contracts
         abi = abis('erc20')
         self.tokenContract = self.web3.eth.contract(self.CONTRACT, abi=abi)
@@ -45,7 +49,7 @@ class Helysia:
         # get token data
         self.tokenName = self.tokenContract.functions.name().call()
         self.tokenSymbol = self.tokenContract.functions.symbol().call()
-        self.decimals = 10 ** self.tokenContract.functions.decimals().call()        
+        self.decimals = 10 ** self.tokenContract.functions.decimals().call()
         
         print('Token', self.tokenName)
 
@@ -58,15 +62,26 @@ class Helysia:
         return tokenBalance, ethBalance
 
     def tx(self, tx_hash='0x6569a94a84bcee90ee59472bd072ca463e57102fc3b9cf747f173086204e94b1'):    
-        tx = self.web3.eth.getTransactionReceipt(tx_hash)
+        tx = self.web3.eth.waitForTransactionReceipt(tx_hash)
         if tx.logs:
-            data = int(tx.logs[0].data, 16)        
+            data = int(tx.logs[0].data, 16)
+            _from = tx['from']
+            _int = self.web3.toInt(tx.logs[0].topics[2])
+            _hex = self.web3.toHex(_int)
+            _to = self.web3.toChecksumAddress(_hex)
         else:
             tx = self.web3.eth.getTransaction(tx_hash)
             data = tx.value
+            _from = tx['from']
+            _to = tx['to']
 
+        # get block timestamp
+        block = self.web3.eth.getBlock(tx.blockNumber)
+        timestamp = block.timestamp
+        # get value
         value = self.web3.fromWei(data, 'ether')
-        return tx, value
+
+        return tx, value, _from, _to, timestamp
 
     def sendEther(self, address='0xcfB35Ae84f6216EcdC75c5f56C6c4C4c9CA8D761', amount='0.01'):
         # get balance
@@ -198,11 +213,11 @@ if __name__ == '__main__':
         elif action == 'X':
             tx_hash = input('What tx hash? ')
             if tx_hash:
-                tx, value = helysia.tx(tx_hash)
+                tx, value, _from, _to, timestamp = helysia.tx(tx_hash)
             else:
-                tx, value = helysia.tx()
-            print('TX', tx)
-            print('value', value)
+                tx, value, _from, _to, timestamp = helysia.tx()
+            # print('TX', tx)
+            print('from', _from, 'to', _to, value, 'at', timestamp)
         elif action == 'E':
             account = input('To what account? ')
             amount = input('How much ETH? ')
