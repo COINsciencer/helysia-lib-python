@@ -2,6 +2,7 @@ import os
 from hexbytes import HexBytes
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
+from web3.gas_strategies.time_based import fast_gas_price_strategy, slow_gas_price_strategy, medium_gas_price_strategy
 import urllib
 import json
 from abis import abis
@@ -39,6 +40,9 @@ class Helysia:
 
         if self.CHAIN == 'rinkeby':
             self.web3.middleware_onion.inject(geth_poa_middleware, layer=0)
+
+        # setup gas medium_gas_price_strategy
+        self.web3.eth.setGasPriceStrategy(medium_gas_price_strategy)
 
         # init contracts
         abi = abis('erc20')
@@ -111,7 +115,7 @@ class Helysia:
         tx_hash = HexBytes(self.web3.eth.sendRawTransaction(signed_txn.rawTransaction)).hex()
         return tx_hash
 
-    def sendTokens(self, address='0xcfB35Ae84f6216EcdC75c5f56C6c4C4c9CA8D761', amount='1'):
+    def sendTokens(self, address='0x7678f5F34843C69C7360E1bE7e85D83994164235', amount='1'):
         # get balance
         balance, eth = self.balance(self.ACCOUNT)
         # check balance
@@ -121,17 +125,32 @@ class Helysia:
         tokens = float(amount) * self.decimals
         # get the nonce
         nonce = self.web3.eth.getTransactionCount(self.ACCOUNT)
+        # setup data
+        data = self.tokenContract.encodeABI('transfer', [address, int(tokens)])
+        # get the gas price
+        generateGasPrice = self.web3.eth.generateGasPrice()
+        gasPrice = hex(generateGasPrice)        
+        # transaction gas estimation
+        gas = self.web3.eth.estimateGas({
+            "value": '0x0',
+            "data": data,
+            "from": '0x0000000000000000000000000000000000000000',
+            "to": '0x0000000000000000000000000000000000000000'   
+        })
+
         # create a raw transaction
         rawTransaction = {
             "from": self.ACCOUNT,
-            'gasPrice': hex(2000000000),
-            'gas': hex(210000),
+            'gasPrice': gasPrice,
+            'gas': hex(gas * 10),
             'to': self.CONTRACT,
             'value': '0x0',
             'nonce': hex(nonce),
-            'data': self.tokenContract.encodeABI('transfer', [address, int(tokens)]),
+            'data': data,
             'chainId': 4 if self.CHAIN == 'rinkeby' else 1
         }
+
+        print(rawTransaction)
         # sing the transaction
         signed_txn = self.web3.eth.account.signTransaction(
             rawTransaction,
@@ -225,7 +244,11 @@ if __name__ == '__main__':
                 tx_hash = helysia.sendEther(account, amount)
             else:
                 tx_hash = helysia.sendEther()
-            print('https://{}.etherscan.io/tx/{}'.format(os.environ.get('CHAIN'), tx_hash))
+            chain = os.environ.get('CHAIN')
+            if chain == 'mainnet':
+                print('https://etherscan.io/tx/{}'.format(tx_hash))
+            else:
+                print('https://{}.etherscan.io/tx/{}'.format(chain, tx_hash))
         elif action == 'T':
             account = input('To what account? ')
             amount = input('How much Helysia? ')
@@ -233,7 +256,11 @@ if __name__ == '__main__':
                 tx_hash = helysia.sendTokens(account, amount)
             else:
                 tx_hash = helysia.sendTokens()
-            print('https://{}.etherscan.io/tx/{}'.format(os.environ.get('CHAIN'), tx_hash))
+            chain = os.environ.get('CHAIN')
+            if chain == 'mainnet':
+                print('https://etherscan.io/tx/{}'.format(tx_hash))
+            else:
+                print('https://{}.etherscan.io/tx/{}'.format(chain, tx_hash))
         elif action == 'P':
             amount = input('How much Helysia (1)? ')
             if amount:
